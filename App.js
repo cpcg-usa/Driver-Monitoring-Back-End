@@ -439,11 +439,12 @@ app.get('/GetRole', function (req, res) {
 app.post('/GenerateCallLogAndCoordinate', async function (req, res) {
     // console.log(req.body.SearchDate);
     var Date = req.body.SearchDate;
+    console.log(Date);
     //var Date = '9/1/2021';
-    const salesOrders = await drivermonitoringservice.GetDriverTripRecords(Date);
-    //console.log('salesorders',salesOrders)
+   const salesOrders = await drivermonitoringservice.GetDriverTripRecords(Date);
+   // console.log('salesorders',salesOrders)
     const callLogdata = await drivermonitoringservice.GetDriverCallLogRecords(Date);
-    //console.log('call logs',callLogdata)
+   // console.log('call logs',callLogdata)
     var result = drivermonitoringservice.CompareTripDataWithLogData(salesOrders, callLogdata, Date);
     if (result) {
         return res.json({ success: true, message: "log generated successfully.", result: result.recordset });
@@ -465,7 +466,7 @@ app.post('/GetCallLocationLogs', function (req, res) {
             'dbo.DriverMonitoringExceptionActivityData ea on solog.[SalesOrderNumber] = ea.[Order #]', function (err, result) {
 
                 if (err) console.log(err)
-
+               // console.log(result);
                 if (result.recordset.length > 0) {
                     return res.json({ success: true, message: "record fetched successfully.", result: result.recordset });
                 }
