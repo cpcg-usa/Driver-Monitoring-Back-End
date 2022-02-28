@@ -147,7 +147,7 @@ app.post('/CreateAction', function (req, res) {
             var phonenumber = '';
             request.query('Select Phone from [dbo].[adminprofile] WHERE Id = @assignee_profile_id;', (err, result) => {
                 if (err) console.log(err);
-             console.log(result.recordset);
+                console.log(result.recordset);
                 if (result.recordset.length > 0) {
                     phonenumber = result.recordset[0].Phone;
                 }
@@ -437,61 +437,20 @@ app.get('/GetRole', function (req, res) {
 });
 
 app.post('/GenerateCallLogAndCoordinate', async function (req, res) {
-    // connect to your database
-    // console.log(req.body);
-    var Date = '9/1/2021';
+    // console.log(req.body.SearchDate);
+    var Date = req.body.SearchDate;
+    //var Date = '9/1/2021';
     const salesOrders = await drivermonitoringservice.GetDriverTripRecords(Date);
     //console.log('salesorders',salesOrders)
     const callLogdata = await drivermonitoringservice.GetDriverCallLogRecords(Date);
     //console.log('call logs',callLogdata)
-    drivermonitoringservice.CompareTripDataWithLogData(salesOrders, callLogdata, Date);
-
-
-    //    console.log(salesOrders);
-    //    console.log(callLogdata);
-    // sql.connect(config.config, function (err) {
-    //     if (err) console.log(err);
-
-    //     request = new sql.Request();
-
-    //     request.input('Date', sql.Date, req.body.DateToSearch);
-    //     request.query('SELECT * FROM [dbo].[SalesOrder_Logs_Details]', function (err, result) {
-
-    //         if (err) console.log(err)
-
-    //         if (result.recordset.length > 0) {
-
-    //             salesOrders.foreach(salesorder => {
-    //                 const filteredUsers = result.recordset.filter(SOlog => {
-    //                     if (salesorder.ordernumber !== SOlog.SalesOrderNumber) {
-    //                         StoreSalesOrder(salesorder, callLogdata);
-    //                         // coordinates = googlemapservice.calculateCustomerAddressGeoCoordinates(salesorder.address);
-
-    //                         // let numberOfCallMade = drivermonitoringservice.checkCallLogDetail(salesorder, callLogdata);
-    //                         // if (numberOfCallMade.length > 0) {
-    //                         //     isPhoneFoundInLog = true;
-    //                         // }
-    //                         // else {
-    //                         //     isPhoneFoundInLog = false;
-    //                         // }
-    //                         // drivermonitoringservice.SaveSalesOrderLog([{
-    //                         //     SalesOrderNumber: salesorder.ordernumber, Date: salesorder.TripDate,
-    //                         //     IsCustomerPhoneInCallLog: isPhoneFoundInLog, Customerlatitude: coordinates.latitude, CustomerLongitude: coordinates.longitude
-    //                         // }]);
-    //                     }
-    //                 });
-    //             });
-
-    //             return res.json({ success: true, message: "record fetched successfully.", result: result.recordset });
-    //         }
-    //         else {
-    //             salesOrders.foreach(salesorder => {
-    //                 StoreSalesOrder(salesorder, callLogdata)
-    //             });
-    //         }
-    //     });
-    // });
-
+    var result = drivermonitoringservice.CompareTripDataWithLogData(salesOrders, callLogdata, Date);
+    if (result) {
+        return res.json({ success: true, message: "log generated successfully.", result: result.recordset });
+    }
+    else {
+        return res.status(400).json({ success: false, message: "unable to generate record" });
+    }
 });
 
 app.post('/GetCallLocationLogs', function (req, res) {
@@ -502,23 +461,18 @@ app.post('/GetCallLocationLogs', function (req, res) {
         // create Request object
         request = new sql.Request();
 
-        // query to the database and get the records
+        request.query('select solog.*, ea.[Exception Type] as ExceptionType, ea.Note from dbo.SalesOrder_Logs_Details as solog inner join ' +
+            'dbo.DriverMonitoringExceptionActivityData ea on solog.[SalesOrderNumber] = ea.[Order #]', function (err, result) {
 
-        request.query('select solog.*, ea.[Exception Type] as ExceptionType, ea.Note from dbo.SalesOrder_Logs_Details as solog inner join '+
-        'dbo.DriverMonitoringExceptionActivityData ea on solog.[SalesOrderNumber] = ea.[Order #]', function (err, result) {
+                if (err) console.log(err)
 
-            if (err) console.log(err)
-
-            // send records as a response
-
-            if (result.recordset.length > 0) {
-                console.log(result.recordset);
-                return res.json({ success: true, message: "record fetched successfully.", result: result.recordset });
-            }
-            else {
-                return res.status(400).json({ isAuth: false, message: "unable to fetch record" });
-            }
-        });
+                if (result.recordset.length > 0) {
+                    return res.json({ success: true, message: "record fetched successfully.", result: result.recordset });
+                }
+                else {
+                    return res.status(400).json({ isAuth: false, message: "unable to fetch record" });
+                }
+            });
     });
 
 });
@@ -538,6 +492,6 @@ app.get("/logout", (req, res) => {
     return res.send("logout successfully");
 });
 
-var server = app.listen(5000, function () {
+var server = app.listen(5001, function () {
     console.log('Server is running..');
 });

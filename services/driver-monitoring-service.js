@@ -25,7 +25,7 @@ function SaveSalesOrderLog(salesOrder) {
                 .input('DifferenceInLastCallAndSkipTimes', sql.Float, salesOrder.TimeDifference)
                 .query("INSERT INTO dbo.SalesOrder_Logs_Details VALUES (@SalesOrderNumber, @Date, @NumberOfCallMade, @IsCustomerPhoneInLog, @CustomerAddressLatitude, @CustomerAddressLongitude,@DifferenceInCoordinates, @DifferenceInLastCallAndSkipTimes)")
                 .then((result) => {
-
+                    return true;
                 })
                 .then(() => conn.close())
         })
@@ -36,7 +36,7 @@ async function GetDriverCallLogRecords(date) {
     return new Promise(function (resolve, reject) {
         sql.connect(config)
             .then((conn) => {
-                //console.log(date);
+
                 const request = conn.request();
                 var query = "SELECT CONVERT(VARCHAR(50), TIME) as TIME, DATE, PHONE, DESTINATION, [Employee Phone], " +
                     "[Employee Name] from dbo.DriverMonitoringCallLogData WHERE Date = @Date"
@@ -58,7 +58,6 @@ async function GetDriverTripRecords(date) {
     return new Promise(function (resolve, reject) {
         sql.connect(config)
             .then((conn) => {
-
                 const request = conn.request();
                 var query = "select ta.[Event Time] as DateTime, ta.[Trip Date] as Date,Latitude, Longitude, " +
                     "Address, ta.[Order #] as OrderNumber, [Phone #] as Phone, ea.Note, " +
@@ -109,7 +108,7 @@ async function CompareTripDataWithLogData(salesOrders, callLogdata, Date) {
                         });
                     }
                 })
-                .then(() => conn.close())
+                .then(() => conn.close()).then(()=>{ return true;})
         })
 }
 
