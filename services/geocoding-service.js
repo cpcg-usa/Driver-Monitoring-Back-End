@@ -51,7 +51,7 @@ async function calculateDistanceByGeoCoordinates(lat1, lat2, long1, long2){
         var difflon = (long2-long1) * (Math.PI/180); // Radian difference (longitudes)
   
         var d = 2 * R * Math.asin(Math.sqrt(Math.sin(difflat/2)*Math.sin(difflat/2)+Math.cos(rlat1)*Math.cos(rlat2)*Math.sin(difflon/2)*Math.sin(difflon/2)));
-        resolve( d);
+        resolve(Math.round((d + Number.EPSILON) * 100) / 100 );
     });
 
 }

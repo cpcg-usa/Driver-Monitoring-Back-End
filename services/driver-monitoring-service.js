@@ -14,7 +14,6 @@ function SaveSalesOrderLog(salesOrder) {
         .then((conn) => {
             const request = conn.request();
             let result = request
-
                 .input('SalesOrderNumber', sql.NVarChar, salesOrder.SalesOrderNumber)
                 .input('Date', sql.NVarChar, dateformatehelper.convertformattoyyyymmdd(salesOrder.Date))
                 .input('NumberOfCallMade', sql.Int, salesOrder.NumberOfCallMade)
@@ -27,7 +26,7 @@ function SaveSalesOrderLog(salesOrder) {
                 .then((result) => {
                     return true;
                 })
-                .then(() => conn.close())
+            // .then(() => conn.close())
         })
 }
 
@@ -45,7 +44,11 @@ async function GetDriverCallLogRecords(date) {
                     .query(query)
                     .then((result) => {
                         if (result.recordset.length > 0) {
+                            //console.log(result.recordset);
                             resolve(result.recordset);
+                        }
+                        else {
+                            resolve([]);
                         }
                     })
                     .then(() => conn.close())
@@ -70,7 +73,7 @@ async function GetDriverTripRecords(date) {
                     .query(query)
                     .then((result) => {
                         if (result.recordset.length > 0) {
-
+                            // console.log(result.recordset);
                             resolve(result.recordset);
                         }
                     })
@@ -80,7 +83,7 @@ async function GetDriverTripRecords(date) {
 }
 
 async function CompareTripDataWithLogData(salesOrders, callLogdata, Date) {
-    var newSalesOrderList = [];
+    var newSalesOrderList = [];    
     sql.connect(config)
         .then((conn) => {
             const request = conn.request();
@@ -92,11 +95,14 @@ async function CompareTripDataWithLogData(salesOrders, callLogdata, Date) {
                         var salesorderids = result.recordset.map(function (item) {
                             return item.SalesOrderNumber;
                         });
+                        console.log('found ids in log table', salesorderids);
                         salesOrders.forEach(salesorder => {
                             if (!salesorderids.includes(salesorder.OrderNumber)) {
                                 newSalesOrderList.push(salesorder);
+                                //StoreSalesOrder(salesorder, callLogdata);//new line add to fix issue
                             }
                         });
+
                         newSalesOrderList.forEach(salesorder => {
                             StoreSalesOrder(salesorder, callLogdata)
                         });
@@ -108,30 +114,32 @@ async function CompareTripDataWithLogData(salesOrders, callLogdata, Date) {
                         });
                     }
                 })
-                .then(() => conn.close()).then(()=>{ return true;})
+                .then(() => conn.close()).then(() => { return true; })
         })
 }
 
 
 function checkCallLogDetail(salesOrder, callLogDetails) {
     var numberOfCallMade = 0;
-    var callAndStopTimesDiff;
-    callLogDetails.forEach(calldetail => {
+    var callAndStopTimesDiff;   
+    if (callLogDetails.length > 0) {
+        callLogDetails.forEach(calldetail => {
 
-        let salesorderdate = dateformatehelper.convertformattommddyyyy(salesOrder.Date);
-        let calllogdate = dateformatehelper.convertdateobjectformat(calldetail.DATE);
+            let salesorderdate = dateformatehelper.convertformattommddyyyy(salesOrder.Date);
+            let calllogdate = dateformatehelper.convertdateobjectformat(calldetail.DATE);
 
-        let salesordertime = dateformatehelper.extractTimeFromDate(salesOrder.DateTime);
+            let salesordertime = dateformatehelper.extractTimeFromDate(salesOrder.DateTime);
 
-        let calledPhone = stringhelper.getnumberfromstring(calldetail.PHONE);
-        let customerPhone = stringhelper.getnumberfromstring(salesOrder.Phone);
+            let calledPhone = stringhelper.getnumberfromstring(calldetail.PHONE);
+            let customerPhone = stringhelper.getnumberfromstring(salesOrder.Phone);
 
-        if (calllogdate === salesorderdate &&
-            calledPhone === customerPhone) {
-            callAndStopTimesDiff = dateformatehelper.convertstrtimetotime(salesordertime, calldetail.TIME);
-            numberOfCallMade++;
-        }
-    });
+            if (calllogdate === salesorderdate &&
+                calledPhone === customerPhone) {
+                callAndStopTimesDiff = dateformatehelper.convertstrtimetotime(salesordertime, calldetail.TIME);
+                numberOfCallMade++;
+            }
+        });
+    }
     return { numberOfCallMade, callAndStopTimesDiff };
 }
 
