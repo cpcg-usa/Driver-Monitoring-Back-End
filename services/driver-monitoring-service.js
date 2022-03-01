@@ -6,13 +6,15 @@ const googlemapservice = require('../services/geocoding-service');
 const dateformatehelper = require('../helpers/datehelper');
 const stringhelper = require('../helpers/numberhelper');
 
-const instance = new express();
 dotenv.config();
 
 function SaveSalesOrderLog(salesOrder) {
     sql.connect(config)
         .then((conn) => {
             const request = conn.request();
+            var query = "INSERT INTO dbo.SalesOrder_Logs_Details VALUES "+
+            "(@SalesOrderNumber, @Date, @NumberOfCallMade, @IsCustomerPhoneInLog, @CustomerAddressLatitude, "+
+            "@CustomerAddressLongitude,@DifferenceInCoordinates, @DifferenceInLastCallAndSkipTimes, @TripNumber)";
             let result = request
                 .input('SalesOrderNumber', sql.NVarChar, salesOrder.SalesOrderNumber)
                 .input('Date', sql.NVarChar, dateformatehelper.convertformattoyyyymmdd(salesOrder.Date))
@@ -22,7 +24,8 @@ function SaveSalesOrderLog(salesOrder) {
                 .input('CustomerAddressLongitude', sql.Float, salesOrder.CustomerLongitude)
                 .input('DifferenceInCoordinates', sql.Float, salesOrder.distance)
                 .input('DifferenceInLastCallAndSkipTimes', sql.Float, salesOrder.TimeDifference)
-                .query("INSERT INTO dbo.SalesOrder_Logs_Details VALUES (@SalesOrderNumber, @Date, @NumberOfCallMade, @IsCustomerPhoneInLog, @CustomerAddressLatitude, @CustomerAddressLongitude,@DifferenceInCoordinates, @DifferenceInLastCallAndSkipTimes)")
+                .input('TripNumber', sql.NVarChar, salesOrder.TripNumber)
+                .query(query)
                 .then((result) => {
                     return true;
                 })
@@ -43,8 +46,7 @@ async function GetDriverCallLogRecords(date) {
                     .input('Date', sql.NVarChar, date)
                     .query(query)
                     .then((result) => {
-                        if (result.recordset.length > 0) {
-                            //console.log(result.recordset);
+                        if (result.recordset.length > 0) {                           
                             resolve(result.recordset);
                         }
                         else {
@@ -63,11 +65,12 @@ async function GetDriverTripRecords(date) {
             .then((conn) => {
                 const request = conn.request();
                 var query = "select ta.[Event Time] as DateTime, ta.[Trip Date] as Date,Latitude, Longitude, " +
-                    "Address, ta.[Order #] as OrderNumber, [Phone #] as Phone, ea.Note, " +
+                    "Address, ta.[Order #] as OrderNumber, [Phone #] as Phone, ea.Note, ta.[Trip #] TripNumber, " +
                     "ea.[Exception Type] as ExceptionType from dbo.DriverMonitoringTripEventActivityData ta " +
                     "inner join dbo.DriverMonitoringTripItineraryData ti on ta.[Order #]=ti.[Order #] inner join " +
                     "dbo.DriverMonitoringExceptionActivityData ea on ta.[Order #] = ea.[Order #]" +
-                    "WHERE ta.Type = 'Skip Stop' AND [Trip Date] = @Date  AND ea.[Exception Type] = 'Skip Stop Exception'"
+                    "WHERE ta.Type = 'Skip Stop' AND [Trip Date] = @Date  AND "+
+                    "ea.[Exception Type] = 'Skip Stop Exception' and ti.[Trip #] = ta.[Trip #]"
                 let result = request
                     .input('Date', sql.NVarChar, date)
                     .query(query)
@@ -83,7 +86,7 @@ async function GetDriverTripRecords(date) {
 }
 
 async function CompareTripDataWithLogData(salesOrders, callLogdata, Date) {
-    var newSalesOrderList = [];    
+    var newSalesOrderList = [];
     sql.connect(config)
         .then((conn) => {
             const request = conn.request();
@@ -95,17 +98,30 @@ async function CompareTripDataWithLogData(salesOrders, callLogdata, Date) {
                         var salesorderids = result.recordset.map(function (item) {
                             return item.SalesOrderNumber;
                         });
-                        console.log('found ids in log table', salesorderids);
+
+                        var salesorderdatetime = result.recordset.map(function (item) {
+                            return item.DateTime;
+                        });
+                    
                         salesOrders.forEach(salesorder => {
-                            if (!salesorderids.includes(salesorder.OrderNumber)) {
-                                newSalesOrderList.push(salesorder);
-                                //StoreSalesOrder(salesorder, callLogdata);//new line add to fix issue
+                            if (!salesorderids.includes(salesorder.OrderNumber)) {                               
+                                if (!salesorderdatetime.includes(salesorder.DateTime)) {                                  
+                                    //newSalesOrderList.push(salesorder);
+                                    StoreSalesOrder(salesorder, callLogdata);
+                                }                                
                             }
                         });
 
-                        newSalesOrderList.forEach(salesorder => {
-                            StoreSalesOrder(salesorder, callLogdata)
-                        });
+                        // salesOrders.forEach(salesorder => {
+                        //     if (!salesorderids.includes(salesorder.OrderNumber)) {
+                        //         newSalesOrderList.push(salesorder);
+                        //         //StoreSalesOrder(salesorder, callLogdata);//new line add to fix issue
+                        //     }
+                        // });
+
+                        // newSalesOrderList.forEach(salesorder => {
+                        //     StoreSalesOrder(salesorder, callLogdata)
+                        // });
 
                     }
                     else {
@@ -121,18 +137,17 @@ async function CompareTripDataWithLogData(salesOrders, callLogdata, Date) {
 
 function checkCallLogDetail(salesOrder, callLogDetails) {
     var numberOfCallMade = 0;
-    var callAndStopTimesDiff;   
+    var callAndStopTimesDiff;
     if (callLogDetails.length > 0) {
         callLogDetails.forEach(calldetail => {
 
             let salesorderdate = dateformatehelper.convertformattommddyyyy(salesOrder.Date);
-            let calllogdate = dateformatehelper.convertdateobjectformat(calldetail.DATE);
-
+            let calllogdate = dateformatehelper.convertdateobjectformat(calldetail.DATE);           
             let salesordertime = dateformatehelper.extractTimeFromDate(salesOrder.DateTime);
 
             let calledPhone = stringhelper.getnumberfromstring(calldetail.PHONE);
             let customerPhone = stringhelper.getnumberfromstring(salesOrder.Phone);
-
+            
             if (calllogdate === salesorderdate &&
                 calledPhone === customerPhone) {
                 callAndStopTimesDiff = dateformatehelper.convertstrtimetotime(salesordertime, calldetail.TIME);
@@ -146,9 +161,8 @@ function checkCallLogDetail(salesOrder, callLogDetails) {
 async function StoreSalesOrder(salesorder, callLogdata) {
 
     var coordinates = await googlemapservice.calculateCustomerAddressGeoCoordinates(salesorder.Address);
-
     var differenceInCoordinate = await googlemapservice.calculateDistanceByGeoCoordinates(salesorder.Latitude, coordinates.Latitude, salesorder.Longitude, coordinates.Longitude);
-
+   
     var isPhoneFoundInLog;
     let { numberOfCallMade, callAndStopTimesDiff } = checkCallLogDetail(salesorder, callLogdata);
     if (numberOfCallMade > 0) {
@@ -161,8 +175,10 @@ async function StoreSalesOrder(salesorder, callLogdata) {
     SaveSalesOrderLog({
         SalesOrderNumber: salesorder.OrderNumber, Date: salesorder.Date, NumberOfCallMade: numberOfCallMade,
         IsCustomerPhoneInCallLog: isPhoneFoundInLog, CustomerLatitude: coordinates.Latitude,
-        CustomerLongitude: coordinates.Longitude, distance: differenceInCoordinate, TimeDifference: callAndStopTimesDiff
+        CustomerLongitude: coordinates.Longitude, distance: differenceInCoordinate, 
+        TimeDifference: callAndStopTimesDiff, TripNumber: salesorder.TripNumber
     });
+
 }
 
 module.exports = {

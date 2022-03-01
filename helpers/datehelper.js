@@ -8,8 +8,12 @@ function convertformattommddyyyy(inputDate) {
 }
 
 function convertdateobjectformat(inputDate) {
-    const newdate = new Date(inputDate + (3600 * 1000 * 24));    
-    return ((newdate.getMonth() + 2) + '/' + (newdate.getDate() > 30 ? 1 : newdate.getDate())+ '/' + newdate.getFullYear());
+    var date = new Date(inputDate);
+    if (!isNaN(date.getTime())) {
+        return (date.getMonth() + 1) + '/' + (date.getDate() + 1 )+ '/' + date.getFullYear();
+    }
+    // const newdate = new Date(inputDate + (3600 * 1000 * 24));    
+    // return ((newdate.getMonth() + 2) + '/' + (newdate.getDate() > 30 ? 1 : newdate.getDate())+ '/' + newdate.getFullYear());
 }
 
 function convertformattoyyyymmdd(inputDate) {

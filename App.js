@@ -455,15 +455,19 @@ app.post('/GenerateCallLogAndCoordinate', async function (req, res) {
 });
 
 app.post('/GetCallLocationLogs', function (req, res) {
-    // connect to your database
-
+    var Date = req.body.SearchDate;
+    
     sql.connect(config, function (err) {
-        if (err) console.log(err);
-        // create Request object
+        if (err) console.log(err);      
         request = new sql.Request();
 
-        request.query('select solog.*, ea.[Exception Type] as ExceptionType, ea.Note from dbo.SalesOrder_Logs_Details as solog inner join ' +
-            'dbo.DriverMonitoringExceptionActivityData ea on solog.[SalesOrderNumber] = ea.[Order #]', function (err, result) {
+        request
+        .input('Date', sql.NVarChar, Date)
+        .query('select solog.[Id],solog.[SalesOrderNumber],CONVERT(nvarchar(50),solog.[Date]) as Date,solog.[NumberOfCallMade],solog.[IsCustomerPhoneInLog]'+
+        ',solog.[CustomerAddressLatitude],solog.[CustomerAddressLongitude],solog.[DifferenceInCoordinates]'+
+        ',solog.[DifferenceInLastCallAndSkipTimes], ea.[Exception Type] as ExceptionType, ea.Note '+
+        'from dbo.SalesOrder_Logs_Details as solog inner join dbo.DriverMonitoringExceptionActivityData ea ' +
+            'on solog.[SalesOrderNumber] = ea.[Order #] WHERE solog.Date = @Date', function (err, result) {
 
                 if (err) console.log(err)
                // console.log(result);
@@ -471,7 +475,7 @@ app.post('/GetCallLocationLogs', function (req, res) {
                     return res.json({ success: true, message: "record fetched successfully.", result: result.recordset });
                 }
                 else {
-                    return res.status(400).json({ isAuth: false, message: "unable to fetch record" });
+                    return res.status(400).json({ success: false, message: "unable to fetch record", result: [] });
                 }
             });
     });
