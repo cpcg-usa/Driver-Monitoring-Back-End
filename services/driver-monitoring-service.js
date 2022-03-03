@@ -69,8 +69,8 @@ async function GetDriverTripRecords(date) {
                     "ea.[Exception Type] as ExceptionType from dbo.DriverMonitoringTripEventActivityData ta " +
                     "inner join dbo.DriverMonitoringTripItineraryData ti on ta.[Order #]=ti.[Order #] inner join " +
                     "dbo.DriverMonitoringExceptionActivityData ea on ta.[Order #] = ea.[Order #]" +
-                    "WHERE ta.Type = 'Skip Stop' AND [Trip Date] = @Date  AND "+
-                    "ea.[Exception Type] = 'Skip Stop Exception' and ti.[Trip #] = ta.[Trip #]"
+                    "WHERE ta.Type = 'Skip Stop' AND [Trip Date] = @Date  AND ea.[Exception Type] = 'Skip Stop Exception'"+
+                    " and ti.[Trip #] = ta.[Trip #] and ta.[Trip #] = ea.[Trip #]"
                 let result = request
                     .input('Date', sql.NVarChar, date)
                     .query(query)
