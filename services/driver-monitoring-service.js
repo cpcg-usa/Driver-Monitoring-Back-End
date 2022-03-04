@@ -61,6 +61,7 @@ async function GetDriverCallLogRecords(date) {
 async function GetDriverTripRecords(date) {
 
     return new Promise(function (resolve, reject) {
+       
         sql.connect(config)
             .then((conn) => {
                 const request = conn.request();
@@ -76,7 +77,6 @@ async function GetDriverTripRecords(date) {
                     .query(query)
                     .then((result) => {
                         if (result.recordset.length > 0) {
-                            // console.log(result.recordset);
                             resolve(result.recordset);
                         }
                     })

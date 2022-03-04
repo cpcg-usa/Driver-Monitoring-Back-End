@@ -436,15 +436,12 @@ app.get('/GetRole', function (req, res) {
 
 });
 
-app.post('/GenerateCallLogAndCoordinate', async function (req, res) {
-    // console.log(req.body.SearchDate);
-    var Date = req.body.SearchDate;
-    console.log(Date);
-    //var Date = '9/1/2021';
+app.post('/GenerateCallLogAndCoordinate', async function (req, res) {   
+    var Date = req.body.Date; 
    const salesOrders = await drivermonitoringservice.GetDriverTripRecords(Date);
-   // console.log('salesorders',salesOrders)
+    //console.log('salesorders',salesOrders)
     const callLogdata = await drivermonitoringservice.GetDriverCallLogRecords(Date);
-   // console.log('call logs',callLogdata)
+    //console.log('call logs',callLogdata)
     var result = drivermonitoringservice.CompareTripDataWithLogData(salesOrders, callLogdata, Date);
     if (result) {
         return res.json({ success: true, message: "log generated successfully.", result: result.recordset });
