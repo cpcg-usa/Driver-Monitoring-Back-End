@@ -494,6 +494,6 @@ app.get("/logout", (req, res) => {
     return res.send("logout successfully");
 });
 
-var server = app.listen(5001, function () {
+var server = app.listen(5000, function () {
     console.log('Server is running..');
 });
