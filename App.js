@@ -6,7 +6,8 @@ var sql = require("mssql");
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
 const config = require('./config/config');
-const smsservice = require('./sms-services/sms-service');
+const smsservice = require('./services/sms-service');
+const drivermonitoringservice = require('./services/driver-monitoring-service');
 require("dotenv").config();
 
 app.use(bodyParser.urlencoded({ extended: false }));
@@ -146,7 +147,7 @@ app.post('/CreateAction', function (req, res) {
             var phonenumber = '';
             request.query('Select Phone from [dbo].[adminprofile] WHERE Id = @assignee_profile_id;', (err, result) => {
                 if (err) console.log(err);
-             console.log(result.recordset);
+                console.log(result.recordset);
                 if (result.recordset.length > 0) {
                     phonenumber = result.recordset[0].Phone;
                 }
@@ -435,6 +436,49 @@ app.get('/GetRole', function (req, res) {
 
 });
 
+app.post('/GenerateCallLogAndCoordinate', async function (req, res) {
+    var Date = req.body.Date;
+    const salesOrders = await drivermonitoringservice.GetDriverTripRecords(Date);
+    //console.log('salesorders',salesOrders)
+    const callLogdata = await drivermonitoringservice.GetDriverCallLogRecords(Date);
+    //console.log('call logs',callLogdata)
+    var result = drivermonitoringservice.CompareTripDataWithLogData(salesOrders, callLogdata, Date);
+    if (result) {
+        return res.json({ success: true, message: "log generated successfully.", result: result.recordset });
+    }
+    else {
+        return res.status(400).json({ success: false, message: "unable to generate record" });
+    }
+});
+
+app.post('/GetCallLocationLogs', function (req, res) {
+    var Date = req.body.SearchDate;
+
+    sql.connect(config, function (err) {
+        if (err) console.log(err);
+        request = new sql.Request();
+
+        request
+            .input('Date', sql.NVarChar, Date)
+            .query('select solog.[Id],solog.[SalesOrderNumber],CONVERT(nvarchar(50),solog.[Date]) as Date,solog.[NumberOfCallMade],solog.[IsCustomerPhoneInLog]' +
+                ',solog.[CustomerAddressLatitude],solog.[CustomerAddressLongitude],solog.[DifferenceInCoordinates]' +
+                ',solog.[DifferenceInLastCallAndSkipTimes], ea.[Exception Type] as ExceptionType, ea.Note ' +
+                'from dbo.SalesOrder_Logs_Details as solog inner join dbo.DriverMonitoringExceptionActivityData ea ' +
+                'on solog.[SalesOrderNumber] = ea.[Order #] WHERE solog.Date = @Date', function (err, result) {
+
+                    if (err) console.log(err)
+                    // console.log(result);
+                    if (result.recordset.length > 0) {
+                        return res.json({ success: true, message: "record fetched successfully.", result: result.recordset });
+                    }
+                    else {
+                        return res.status(400).json({ success: false, message: "unable to fetch record", result: [] });
+                    }
+                });
+    });
+
+});
+
 app.post('/GetTripRoutes', function (req, res) {
     var date = req.body.tripdate;
     var tripnumber = req.body.tripnumber;
@@ -443,7 +487,7 @@ app.post('/GetTripRoutes', function (req, res) {
     var querymessage = '';
     console.log(tripnumber);
     console.log(date);
-    
+
     sql.connect(config, function (err) {
         if (err) console.log(err);
         request = new sql.Request();
@@ -483,13 +527,12 @@ app.post('/GetTripRoutes', function (req, res) {
                         coordinates = await googlemapservice.calculateCustomerAddressGeoCoordinates(item.Address);
                         item['Latitude'] = coordinates.Latitude;
                         item['Longitude'] = coordinates.Longitude;
-
                         addressProcessed++;
-                        
                         if (addressProcessed === (array.length - 1)) {
                             return res.json({ success: true, message: querymessage, tripcoordinates: tripassignedroute, activitycoordinates: tripactivityroute });
                         }
                     });
+
                 }
                 else {
                     querymessage = "Error in fetching Sales order log data";
@@ -516,6 +559,6 @@ app.get("/logout", (req, res) => {
     return res.send("logout successfully");
 });
 
-var server = app.listen(5000, function () {
+var server = app.listen(5001, function () {
     console.log('Server is running..');
 });
