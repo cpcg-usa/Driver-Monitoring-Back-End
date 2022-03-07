@@ -435,6 +435,72 @@ app.get('/GetRole', function (req, res) {
 
 });
 
+app.post('/GetTripRoutes', function (req, res) {
+    var date = req.body.tripdate;
+    var tripnumber = req.body.tripnumber;
+    var tripactivityroute = [];
+    var tripassignedroute = [];
+    var querymessage = '';
+    console.log(tripnumber);
+    console.log(date);
+    
+    sql.connect(config, function (err) {
+        if (err) console.log(err);
+        request = new sql.Request();
+        let query = "SELECT [Event Time] as EventTime, [Latitude], [Longitude] FROM [dbo].[DriverMonitoringTripEventActivityData]" +
+            "WHERE [Trip Date] = @Date and [Trip #] = @TripNumber and Type='Arrive at Stop'"
+        request.input('Date', sql.NVarChar, date);
+        request.input('TripNumber', sql.NVarChar, tripnumber);
+        request.query(query, function (err, result) {
+
+            if (err) console.log(err);
+
+            if (result.recordset.length > 0) {
+                tripactivityroute = result.recordset;
+            }
+            else {
+                querymessage = "Error in Trip event activity data fetch";
+            }
+
+            tripactivityroute.forEach(element => {
+                element["EventTime"] = dateformatehelper.extractTimeFromDate(element.EventTime);
+            });
+
+            let query = "SELECT Arrival, Address FROM [dbo].[DriverMonitoringTripItineraryData]" +
+                "WHERE [Trip #] = @TripNumber";
+
+            request.query(query, async (err, result) => {
+                let addressProcessed = 0;
+                if (err) console.log(err);
+
+                if (result.recordset.length > 0) {
+                    tripassignedroute = result.recordset;
+
+                    if (querymessage === "") {
+                        querymessage = "records fetched successfully";
+                    }
+                    tripassignedroute.forEach(async (item, index, array) => {
+                        coordinates = await googlemapservice.calculateCustomerAddressGeoCoordinates(item.Address);
+                        item['Latitude'] = coordinates.Latitude;
+                        item['Longitude'] = coordinates.Longitude;
+
+                        addressProcessed++;
+                        
+                        if (addressProcessed === (array.length - 1)) {
+                            return res.json({ success: true, message: querymessage, tripcoordinates: tripassignedroute, activitycoordinates: tripactivityroute });
+                        }
+                    });
+                }
+                else {
+                    querymessage = "Error in fetching Sales order log data";
+                    return res.status(400).json({ success: false, message: querymessage });
+                }
+            });
+        });
+    });
+
+});
+
 app.post("/iframe", (req, res) => {
     var src = 'https://app.powerbi.com/view?r=eyJrIjoiMGVmMzc0ZDItNzdiYS00NDdmLThhZjktZTY2ZmQ3NzgxOTY5IiwidCI6IjdkODViMzVjLTg3MmUtNDA1NS1hZjkyLTgwZmI3YzlmOTRiNCIsImMiOjF9';
     var title = 'Driver Monitoring Live - Trip Analysis';
