@@ -7,7 +7,9 @@ const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
 const config = require('./config/config');
 const smsservice = require('./services/sms-service');
+const googlemapservice = require('./services/geocoding-service');
 const drivermonitoringservice = require('./services/driver-monitoring-service');
+const dateformatehelper = require('./helpers/datehelper');
 require("dotenv").config();
 
 app.use(bodyParser.urlencoded({ extended: false }));
@@ -491,7 +493,7 @@ app.post('/GetTripRoutes', function (req, res) {
     sql.connect(config, function (err) {
         if (err) console.log(err);
         request = new sql.Request();
-        let query = "SELECT [Event Time] as EventTime, [Latitude], [Longitude] FROM [dbo].[DriverMonitoringTripEventActivityData]" +
+        let query = "SELECT [Event Time] as EventTime, [Latitude], [Longitude], [Order #] as OrderNumber FROM [dbo].[DriverMonitoringTripEventActivityData]" +
             "WHERE [Trip Date] = @Date and [Trip #] = @TripNumber and Type='Arrive at Stop'"
         request.input('Date', sql.NVarChar, date);
         request.input('TripNumber', sql.NVarChar, tripnumber);
@@ -506,11 +508,12 @@ app.post('/GetTripRoutes', function (req, res) {
                 querymessage = "Error in Trip event activity data fetch";
             }
 
-            tripactivityroute.forEach(element => {
+            tripactivityroute.forEach(async element => {
                 element["EventTime"] = dateformatehelper.extractTimeFromDate(element.EventTime);
+                
             });
-
-            let query = "SELECT Arrival, Address FROM [dbo].[DriverMonitoringTripItineraryData]" +
+           
+            let query = "SELECT CAST(Arrival as time) as Arrival, Address FROM [dbo].[DriverMonitoringTripItineraryData]" +
                 "WHERE [Trip #] = @TripNumber";
 
             request.query(query, async (err, result) => {
@@ -525,8 +528,10 @@ app.post('/GetTripRoutes', function (req, res) {
                     }
                     tripassignedroute.forEach(async (item, index, array) => {
                         coordinates = await googlemapservice.calculateCustomerAddressGeoCoordinates(item.Address);
+                      
+                        item['SerialNumber'] = index;
                         item['Latitude'] = coordinates.Latitude;
-                        item['Longitude'] = coordinates.Longitude;
+                        item['Longitude'] = coordinates.Longitude;                       
                         addressProcessed++;
                         if (addressProcessed === (array.length - 1)) {
                             return res.json({ success: true, message: querymessage, tripcoordinates: tripassignedroute, activitycoordinates: tripactivityroute });
@@ -559,6 +564,6 @@ app.get("/logout", (req, res) => {
     return res.send("logout successfully");
 });
 
-var server = app.listen(5001, function () {
+var server = app.listen(5000, function () {
     console.log('Server is running..');
 });
