@@ -487,15 +487,13 @@ app.post('/GetTripRoutes', function (req, res) {
     var tripactivityroute = [];
     var tripassignedroute = [];
     var querymessage = '';
-    console.log(tripnumber);
-    console.log(date);
-
+    
     sql.connect(config, function (err) {
         if (err) console.log(err);
         request = new sql.Request();
         let query = "SELECT [Event Time] as EventTime, [Latitude], [Longitude], [Order #] as OrderNumber FROM [dbo].[DriverMonitoringTripEventActivityData]" +
-            "WHERE [Trip Date] = @Date and [Trip #] = @TripNumber and Type='Arrive at Stop'"
-        request.input('Date', sql.NVarChar, date);
+            "WHERE [Trip #] = @TripNumber and Type='Arrive at Stop'"
+        // request.input('Date', sql.NVarChar, date);
         request.input('TripNumber', sql.NVarChar, tripnumber);
         request.query(query, function (err, result) {
 
@@ -533,7 +531,7 @@ app.post('/GetTripRoutes', function (req, res) {
                         item['Latitude'] = coordinates.Latitude;
                         item['Longitude'] = coordinates.Longitude;                       
                         addressProcessed++;
-                        if (addressProcessed === (array.length - 1)) {
+                        if (addressProcessed === (array.length - 1)) {                           
                             return res.json({ success: true, message: querymessage, tripcoordinates: tripassignedroute, activitycoordinates: tripactivityroute });
                         }
                     });
