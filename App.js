@@ -7,7 +7,9 @@ const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
 const config = require('./config/config');
 const smsservice = require('./services/sms-service');
+const googlemapservice = require('./services/geocoding-service');
 const drivermonitoringservice = require('./services/driver-monitoring-service');
+const dateformatehelper = require('./helpers/datehelper');
 require("dotenv").config();
 
 app.use(bodyParser.urlencoded({ extended: false }));
@@ -436,9 +438,9 @@ app.get('/GetRole', function (req, res) {
 
 });
 
-app.post('/GenerateCallLogAndCoordinate', async function (req, res) {   
-    var Date = req.body.Date; 
-   const salesOrders = await drivermonitoringservice.GetDriverTripRecords(Date);
+app.post('/GenerateCallLogAndCoordinate', async function (req, res) {
+    var Date = req.body.Date;
+    const salesOrders = await drivermonitoringservice.GetDriverTripRecords(Date);
     //console.log('salesorders',salesOrders)
     const callLogdata = await drivermonitoringservice.GetDriverCallLogRecords(Date);
     //console.log('call logs',callLogdata)
@@ -453,28 +455,94 @@ app.post('/GenerateCallLogAndCoordinate', async function (req, res) {
 
 app.post('/GetCallLocationLogs', function (req, res) {
     var Date = req.body.SearchDate;
-    
+
     sql.connect(config, function (err) {
-        if (err) console.log(err);      
+        if (err) console.log(err);
         request = new sql.Request();
 
         request
-        .input('Date', sql.NVarChar, Date)
-        .query('select solog.[Id],solog.[SalesOrderNumber],CONVERT(nvarchar(50),solog.[Date]) as Date,solog.[NumberOfCallMade],solog.[IsCustomerPhoneInLog]'+
-        ',solog.[CustomerAddressLatitude],solog.[CustomerAddressLongitude],solog.[DifferenceInCoordinates]'+
-        ',solog.[DifferenceInLastCallAndSkipTimes], ea.[Exception Type] as ExceptionType, ea.Note '+
-        'from dbo.SalesOrder_Logs_Details as solog inner join dbo.DriverMonitoringExceptionActivityData ea ' +
-            'on solog.[SalesOrderNumber] = ea.[Order #] WHERE solog.Date = @Date', function (err, result) {
+            .input('Date', sql.NVarChar, Date)
+            .query('select solog.[Id],solog.[SalesOrderNumber],CONVERT(nvarchar(50),solog.[Date]) as Date,solog.[NumberOfCallMade],solog.[IsCustomerPhoneInLog]' +
+                ',solog.[CustomerAddressLatitude],solog.[CustomerAddressLongitude],solog.[DifferenceInCoordinates]' +
+                ',solog.[DifferenceInLastCallAndSkipTimes], ea.[Exception Type] as ExceptionType, ea.Note ' +
+                'from dbo.SalesOrder_Logs_Details as solog inner join dbo.DriverMonitoringExceptionActivityData ea ' +
+                'on solog.[SalesOrderNumber] = ea.[Order #] WHERE solog.Date = @Date', function (err, result) {
 
-                if (err) console.log(err)
-               // console.log(result);
+                    if (err) console.log(err)
+                    // console.log(result);
+                    if (result.recordset.length > 0) {
+                        return res.json({ success: true, message: "record fetched successfully.", result: result.recordset });
+                    }
+                    else {
+                        return res.status(400).json({ success: false, message: "unable to fetch record", result: [] });
+                    }
+                });
+    });
+
+});
+
+app.post('/GetTripRoutes', function (req, res) {
+    var date = req.body.tripdate;
+    var tripnumber = req.body.tripnumber;
+    var tripactivityroute = [];
+    var tripassignedroute = [];
+    var querymessage = '';
+    
+    sql.connect(config, function (err) {
+        if (err) console.log(err);
+        request = new sql.Request();
+        let query = "SELECT [Event Time] as EventTime, [Latitude], [Longitude], [Order #] as OrderNumber FROM [dbo].[DriverMonitoringTripEventActivityData]" +
+            "WHERE [Trip #] = @TripNumber and Type='Arrive at Stop'"
+        // request.input('Date', sql.NVarChar, date);
+        request.input('TripNumber', sql.NVarChar, tripnumber);
+        request.query(query, function (err, result) {
+
+            if (err) console.log(err);
+
+            if (result.recordset.length > 0) {
+                tripactivityroute = result.recordset;
+            }
+            else {
+                querymessage = "Error in Trip event activity data fetch";
+            }
+
+            tripactivityroute.forEach(async element => {
+                element["EventTime"] = dateformatehelper.extractTimeFromDate(element.EventTime);
+                
+            });
+           
+            let query = "SELECT CAST(Arrival as time) as Arrival, Address FROM [dbo].[DriverMonitoringTripItineraryData]" +
+                "WHERE [Trip #] = @TripNumber";
+
+            request.query(query, async (err, result) => {
+                let addressProcessed = 0;
+                if (err) console.log(err);
+
                 if (result.recordset.length > 0) {
-                    return res.json({ success: true, message: "record fetched successfully.", result: result.recordset });
+                    tripassignedroute = result.recordset;
+
+                    if (querymessage === "") {
+                        querymessage = "records fetched successfully";
+                    }
+                    tripassignedroute.forEach(async (item, index, array) => {
+                        coordinates = await googlemapservice.calculateCustomerAddressGeoCoordinates(item.Address);
+                      
+                        item['SerialNumber'] = index;
+                        item['Latitude'] = coordinates.Latitude;
+                        item['Longitude'] = coordinates.Longitude;                       
+                        addressProcessed++;
+                        if (addressProcessed === (array.length - 1)) {                           
+                            return res.json({ success: true, message: querymessage, tripcoordinates: tripassignedroute, activitycoordinates: tripactivityroute });
+                        }
+                    });
+
                 }
                 else {
-                    return res.status(400).json({ success: false, message: "unable to fetch record", result: [] });
+                    querymessage = "Error in fetching Sales order log data";
+                    return res.status(400).json({ success: false, message: querymessage });
                 }
             });
+        });
     });
 
 });
